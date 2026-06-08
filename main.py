@@ -9,7 +9,7 @@ def main():
     """Main execution function"""
     
     # Define the fund IDs to retrieve
-    fund_ids = {118955, 118989, 122639}
+    fund_ids = {118955, 118989, 122639, 147946, 119783}
     
     print("\n" + "="*80)
     print("AMFI Mutual Fund NAV Data Retrieval".center(80))
