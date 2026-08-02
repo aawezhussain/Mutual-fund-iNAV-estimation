@@ -7,14 +7,42 @@ and fractional intraday price movements using yfinance.
 
 import json
 import logging
+import os
+import warnings
 from typing import Dict, List, Any
+
+for key in (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "NO_PROXY",
+    "no_proxy",
+):
+    os.environ.pop(key, None)
+
 import yfinance as yf
+
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 # Configure logging for debugging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+logging.getLogger("yahooquery").setLevel(logging.CRITICAL)
+logging.getLogger("requests").setLevel(logging.WARNING)
+
+
+def _safe_float(value: Any) -> float | None:
+    """Convert a value to float when possible."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def get_stock_finance_metrics(tickers: List[str]) -> Dict[str, Dict[str, float]]:
@@ -48,37 +76,44 @@ def get_stock_finance_metrics(tickers: List[str]) -> Dict[str, Dict[str, float]]
                 if not ticker_obj:
                     continue
 
-                fast_info = ticker_obj.fast_info
-                live_price = fast_info.get("lastPrice")
-                prev_close = fast_info.get("previousClose")
+                fast_info = getattr(ticker_obj, "fast_info", {})
+                if not isinstance(fast_info, dict):
+                    fast_info = {}
 
-                # Fallback to historical daily prices if fast_info parameters are missing
-                if live_price is None or prev_close is None:
-                    hist = ticker_obj.history(period="2d")
-                    if len(hist) >= 2:
-                        prev_close = float(hist["Close"].iloc[-2])
-                        live_price = float(hist["Close"].iloc[-1])
-                    elif len(hist) == 1:
-                        prev_close = float(hist["Open"].iloc[0])
-                        live_price = float(hist["Close"].iloc[0])
+                live_price = _safe_float(fast_info.get("lastPrice"))
+                prev_close = _safe_float(fast_info.get("previousClose"))
 
-                if live_price is not None and prev_close and prev_close > 0:
-                    # Fractional change: (P_live - P_prev_close) / P_prev_close
-                    pct_change = (live_price - prev_close) / prev_close
+                if live_price is None or prev_close is None or prev_close <= 0:
+                    try:
+                        hist = ticker_obj.history(period="2d")
+                    except Exception as history_error:
+                        logging.debug(f"History fallback failed for {symbol}: {history_error}")
+                        hist = None
 
-                    results[symbol] = {
-                        "live_price": round(float(live_price), 4),
-                        "prev_close": round(float(prev_close), 4),
-                        "pct_change": round(float(pct_change), 6),
-                    }
-                else:
-                    logging.warning(f"Unable to retrieve valid price quotes for: {symbol}")
+                    if hist is not None and not hist.empty:
+                        if len(hist) >= 2:
+                            prev_close = _safe_float(hist["Close"].iloc[-2])
+                            live_price = _safe_float(hist["Close"].iloc[-1])
+                        elif len(hist) == 1:
+                            prev_close = _safe_float(hist["Open"].iloc[0])
+                            live_price = _safe_float(hist["Close"].iloc[0])
+
+                if live_price is None or prev_close is None or prev_close <= 0:
+                    logging.debug(f"Unable to retrieve valid price quotes for: {symbol}")
+                    continue
+
+                pct_change = (live_price - prev_close) / prev_close
+                results[symbol] = {
+                    "live_price": round(float(live_price), 4),
+                    "prev_close": round(float(prev_close), 4),
+                    "pct_change": round(float(pct_change), 6),
+                }
 
             except Exception as e:
-                logging.error(f"Error processing ticker '{symbol}': {e}")
+                logging.debug(f"Skipping ticker '{symbol}' due to error: {e}")
 
     except Exception as e:
-        logging.error(f"Batch request failed: {e}")
+        logging.debug(f"Batch request failed: {e}")
 
     return results
 

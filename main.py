@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from amfi_nav_fetcher import get_nav_data, print_results
 from portfolio_valuator import get_ticker_from_json
 from fetch_holdings import check_fund_portfolio
+from fund_change_estimator import estimate_fund_expected_change
 
 
 def _build_fund_detail(record):
@@ -118,5 +119,7 @@ def main():
 
 if __name__ == "__main__":
     results_payload = main()
+    if results_payload:
+        results_payload = estimate_fund_expected_change(results_payload)
     print("\nNested payload ready for further action:")
     #print(results_payload)

@@ -3,9 +3,49 @@ AMFI Mutual Fund NAV Data Fetcher
 Fetches daily NAV data from AMFI and filters by fund IDs
 """
 
+import os
+import subprocess
+import time
 import requests
 from typing import List, Set
 from datetime import datetime, date, timedelta
+
+
+def _clear_proxy_environment() -> None:
+    """Disable inherited proxy settings for this process when they are not needed."""
+    for key in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
+        os.environ.pop(key, None)
+
+
+def _build_headers() -> dict:
+    """Return browser-like headers for the AMFI request."""
+    return {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+
+def _read_cache_file() -> str | None:
+    """Read cached NAV data from disk when remote fetches fail."""
+    cache_path = os.getenv("AMFI_NAV_CACHE_PATH")
+    if not cache_path:
+        cache_path = os.path.join(os.path.dirname(__file__), "amfi_nav_cache.txt")
+
+    if not os.path.exists(cache_path):
+        return None
+
+    with open(cache_path, "r", encoding="utf-8") as handle:
+        return handle.read()
 
 
 def fetch_nav_data() -> str:
@@ -18,15 +58,57 @@ def fetch_nav_data() -> str:
     Raises:
         requests.RequestException: If network request fails
     """
-    url = "https://www.amfiindia.com/spages/NAVAll.txt"
+    urls = [
+        "https://www.amfiindia.com/spages/NAVAll.txt",
+        "https://portal.amfiindia.com/spages/NAVAll.txt",
+        "http://www.amfiindia.com/spages/NAVAll.txt",
+        "http://portal.amfiindia.com/spages/NAVAll.txt",
+    ]
+    last_error = None
 
-    try:
-        response = requests.get(url, timeout=10, allow_redirects=True)
-        response.raise_for_status()
-        return response.text
-    except requests.RequestException as e:
-        print(f"Error fetching data from {url}: {e}")
-        raise
+    for attempt in range(3):
+        for url in urls:
+            try:
+                _clear_proxy_environment()
+                response = requests.get(
+                    url,
+                    timeout=30,
+                    allow_redirects=True,
+                    verify=False,
+                    headers=_build_headers(),
+                )
+                response.raise_for_status()
+                return response.text
+            except requests.RequestException as e:
+                last_error = e
+                print(f"Attempt {attempt + 1}/3 failed for {url}: {e}")
+
+        if attempt < 2:
+            time.sleep(1)
+
+    for fallback_attempt in range(3):
+        try:
+            result = subprocess.run(
+                ["curl", "-k", "-L", "--max-time", "30", "https://www.amfiindia.com/spages/NAVAll.txt"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            if result.stdout:
+                return result.stdout
+        except subprocess.CalledProcessError as e:
+            last_error = e
+            print(f"Curl fallback attempt {fallback_attempt + 1}/3 failed: {e}")
+            if fallback_attempt < 2:
+                time.sleep(1)
+
+    cached_data = _read_cache_file()
+    if cached_data is not None:
+        print("Using cached AMFI NAV data because the remote fetch failed.")
+        return cached_data
+
+    print(f"Error fetching data from AMFI: {last_error}")
+    raise last_error
 
 
 def parse_nav_data(raw_text: str) -> List[List]:

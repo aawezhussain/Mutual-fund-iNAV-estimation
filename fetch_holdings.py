@@ -1,5 +1,22 @@
+import os
 import pandas as pd
 from yahooquery import Ticker
+
+
+def _clear_proxy_environment() -> None:
+    """Disable inherited proxy settings before querying Yahoo Finance."""
+    for key in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
+        os.environ.pop(key, None)
+
 
 def check_fund_portfolio(yahoo_ticker: str):
     """
@@ -7,6 +24,7 @@ def check_fund_portfolio(yahoo_ticker: str):
     portfolio holdings data, and prints it out as a structured table.
     """
     print(f"📡 Querying Yahoo database for ticker: {yahoo_ticker}...")
+    _clear_proxy_environment()
     
     # 1. Initialize the network object for the mutual fund
     fund = Ticker(yahoo_ticker)
