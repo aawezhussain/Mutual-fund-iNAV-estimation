@@ -48,13 +48,11 @@ def estimate_fund_expected_change(results_payload: Dict[str, Any]) -> Dict[str, 
             if not isinstance(row, dict):
                 continue
 
-            symbol = row.get("symbol") or row.get("ticker") or row.get("holdingTicker")
+            symbol = row.get("symbol")
             weight = None
-            for key in ("holdingPercent", "weight", "weighting", "percentage"):
-                weight = _coerce_weight(row.get(key))
-                if weight is not None:
-                    break
-
+           
+            weight = _coerce_weight(row.get("holdingPercent"))
+            
             if not symbol or weight is None:
                 continue
 
@@ -129,8 +127,8 @@ def estimate_fund_expected_change(results_payload: Dict[str, Any]) -> Dict[str, 
         "fund_details": updated_fund_details,
     }
 
-    print("\n[estimate_fund_expected_change] Result:")
-    pprint(result_payload["fund_details"][0]["expected_change"] if result_payload.get("fund_details") else {})
+    #print("\n[estimate_fund_expected_change] Result:")
+    #pprint(result_payload["fund_details"][0]["expected_change"] if result_payload.get("fund_details") else {})
 
     return result_payload
 

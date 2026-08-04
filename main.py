@@ -122,4 +122,23 @@ if __name__ == "__main__":
     if results_payload:
         results_payload = estimate_fund_expected_change(results_payload)
     print("\nNested payload ready for further action:")
-    #print(results_payload)
+    for fund in results_payload['fund_details']:
+        fund_name = fund['fund_name']
+        est_change = fund['expected_change']['estimated_pct_change']
+        
+        try:
+            prev_nav = float(fund['nav_value'])
+            prev_nav_str = f"₹{prev_nav:.2f}"
+        except (ValueError, TypeError):
+            prev_nav = None
+            prev_nav_str = "N/A"
+
+        if est_change is not None and prev_nav is not None:
+            expected_nav = prev_nav * (1 + est_change)
+            expected_nav_str = f"₹{expected_nav:.2f}"
+            change_str = f"{est_change * 100:+.2f}%"
+        else:
+            expected_nav_str = "N/A"
+            change_str = "N/A"
+
+        print(f"\nFund: {fund_name} | Previous NAV: {prev_nav_str} | Expected NAV: {expected_nav_str} | Expected Change: {change_str}")

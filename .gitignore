@@ -1,5 +1,4 @@
-__pycache__/amfi_nav_fetcher.cpython-314.pyc
-__pycache__/fetch_holdings.cpython-314.pyc
-__pycache__/portfolio_valuator.cpython-314.pyc
-__pycache__/fund_change_estimator.cpython-314.pyc
-__pycache__/stock_finance_fetcher.cpython-314.pyc
+__pycache__
+.vscode
+.gitignore
+.github/workflows
